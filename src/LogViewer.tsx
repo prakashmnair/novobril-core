@@ -85,9 +85,14 @@ function outcomeClass(outcome: string) {
   return 'text-amber-600 dark:text-amber-400'
 }
 
+// Background tint, not just text colour. A CRITICAL or WARNING row has to be
+// findable by scanning a long table, and screendex's QA checklist asserts the
+// tint explicitly ("row has amber background tint" for DATA_EXPORTED/WARNING) —
+// dropping it during the extraction would have been a silent regression against
+// a documented, human-run test.
 function severityClass(severity: string) {
-  if (severity === 'CRITICAL') return 'text-red-600 dark:text-red-400'
-  if (severity === 'WARNING') return 'text-amber-600 dark:text-amber-400'
+  if (severity === 'CRITICAL') return 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400'
+  if (severity === 'WARNING') return 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400'
   return 'text-slate-500 dark:text-slate-400'
 }
 
@@ -363,10 +368,13 @@ export function LogViewer({
                   ) : (
                     <>
                       <td className="px-4 py-3">
-                        <span className="font-mono text-indigo-600 dark:text-indigo-400 text-xs">{(log as SecurityLogRow).event}</span>
+                        {/* Tinted by severity, matching the pre-extraction behaviour. */}
+                        <span className={`font-mono text-xs px-1.5 py-0.5 rounded ${severityClass((log as SecurityLogRow).severity)}`}>
+                          {(log as SecurityLogRow).event}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs font-semibold ${severityClass((log as SecurityLogRow).severity)}`}>
+                        <span className={`text-xs font-semibold ${severityClass((log as SecurityLogRow).severity)} bg-transparent dark:bg-transparent`}>
                           {(log as SecurityLogRow).severity}
                         </span>
                       </td>
