@@ -16,3 +16,23 @@ export {
   type SecuritySeverity,
   type MakeLogSecurityConfig,
 } from './security-log'
+// Read side of audit/security logging (v0.3.0). The write side above is the
+// factory pattern; these are its counterpart — the package owns the viewer and
+// the query normalisation, the project owns its auth guard and Prisma delegate.
+export {
+  parseLogQuery,
+  buildLogMeta,
+  toLogCsv,
+  AUDIT_CSV_COLUMNS,
+  SECURITY_CSV_COLUMNS,
+  type LogKind,
+  type LogQuery,
+  type LogMeta,
+  type ParseLogQueryOptions,
+} from './log-query'
+export {
+  LogViewer,
+  type LogViewerProps,
+  type AuditLogRow,
+  type SecurityLogRow,
+} from './LogViewer'
