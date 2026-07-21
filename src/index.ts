@@ -36,3 +36,13 @@ export {
   type AuditLogRow,
   type SecurityLogRow,
 } from './LogViewer'
+// Help Center (v0.4.0). searchHelpArticles was identical in 8 of 10 projects;
+// HelpArticle is generic over each project's own category union, so the package
+// shares the model and the scorer without knowing any project's vocabulary.
+export {
+  searchHelpArticles,
+  type HelpSection,
+  type HelpArticle,
+  type HelpCategory,
+  type HelpSearchResult,
+} from './help'
