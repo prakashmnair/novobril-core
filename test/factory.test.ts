@@ -68,19 +68,39 @@ test('makeLogSecurity: severity defaults to INFO, no CRITICAL stdout', async () 
   }
 })
 
-test('makeLogSecurity: CRITICAL emits one masked-email JSON line', async () => {
+test('makeLogSecurity: CRITICAL emits one masked-email, masked-IP JSON line', async () => {
+  // ipAddress masking fixed 2026-07-22 — this was raw/unmasked before, live in
+  // production for every project already firing this CRITICAL path (screendex,
+  // quizzly both fire it on superadmin grant/revoke).
   const lines: string[] = []
   const orig = console.error
   console.error = (...a: unknown[]) => { lines.push(String(a[0])) }
   try {
     const logSecurity = makeLogSecurity({ persist: async () => {} })
-    await logSecurity('SUPERADMIN_GRANTED', { userId: 'u1', userEmail: 'prakash@novobril.com', severity: 'CRITICAL' })
+    await logSecurity('SUPERADMIN_GRANTED', {
+      userId: 'u1', userEmail: 'prakash@novobril.com', ipAddress: '203.0.113.7', severity: 'CRITICAL',
+    })
     assert.equal(lines.length, 1)
     const payload = JSON.parse(lines[0])
     assert.equal(payload.severity, 'CRITICAL')
     assert.equal(payload.event, 'SUPERADMIN_GRANTED')
     assert.equal(payload.userEmail, 'pr***@novobril.com') // masked, not raw
+    assert.equal(payload.ipAddress, '203.0.*.*') // masked, not raw
     assert.ok(payload.timestamp)
+  } finally {
+    console.error = orig
+  }
+})
+
+test('makeLogSecurity: a null ipAddress stays undefined in the CRITICAL line, not masked into a garbage string', async () => {
+  const lines: string[] = []
+  const orig = console.error
+  console.error = (...a: unknown[]) => { lines.push(String(a[0])) }
+  try {
+    const logSecurity = makeLogSecurity({ persist: async () => {} })
+    await logSecurity('SUPERADMIN_REVOKED', { userId: 'u1', severity: 'CRITICAL' })
+    const payload = JSON.parse(lines[0])
+    assert.equal(payload.ipAddress, undefined)
   } finally {
     console.error = orig
   }

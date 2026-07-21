@@ -3,8 +3,14 @@
 // divergent per-project variants (console.error vs console.log; email masked / unmasked / omitted)
 // — the unified version ALWAYS masks email via maskEmail, which closes bookme's prior raw-email-to-
 // Cloud-Logging leak. The stdout JSON's `severity: 'CRITICAL'` is what GCP Cloud Logging keys on.
+//
+// ipAddress is ALSO masked here (fixed 2026-07-22) — it wasn't originally, despite IP being listed
+// as PII requiring server-log scrubbing by this portfolio's own policy just as much as email. The
+// gap was live, not latent: screendex and quizzly already fire this CRITICAL path on every
+// superadmin grant/revoke, so raw IPs had been shipping to GCP Cloud Logging on every one of those
+// events since the factory's v0.2.0 release. Found auditing this file for smartreceipt's adoption.
 
-import { scrubPii, maskEmail } from './pii'
+import { scrubPii, maskEmail, maskIp } from './pii'
 
 export type SecuritySeverity = 'INFO' | 'WARNING' | 'CRITICAL'
 
@@ -60,8 +66,8 @@ export function makeLogSecurity(cfg: MakeLogSecurityConfig) {
         details,
       })
 
-      // Stream CRITICAL events to GCP Cloud Logging for tamper-evident storage. Email is always
-      // masked here (single unified format across all projects).
+      // Stream CRITICAL events to GCP Cloud Logging for tamper-evident storage. Email and IP are
+      // always masked here (single unified format across all projects).
       if (severity === 'CRITICAL') {
         console.error(
           JSON.stringify({
@@ -70,7 +76,7 @@ export function makeLogSecurity(cfg: MakeLogSecurityConfig) {
             event,
             userId: opts.userId ?? undefined,
             userEmail: opts.userEmail ? maskEmail(opts.userEmail) : undefined,
-            ipAddress: opts.ipAddress ?? undefined,
+            ipAddress: opts.ipAddress ? maskIp(opts.ipAddress) : undefined,
             tenantId: opts.tenantId ?? undefined,
             timestamp: new Date().toISOString(),
           }),

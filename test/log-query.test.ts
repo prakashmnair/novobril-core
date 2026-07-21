@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  parseLogQuery, buildLogMeta, toLogCsv, AUDIT_CSV_COLUMNS,
+  parseLogQuery, buildLogMeta, toLogCsv, maskLogRowsForExport, AUDIT_CSV_COLUMNS,
 } from '../src/log-query'
 
 const sp = (q: string) => new URLSearchParams(q)
@@ -145,5 +145,39 @@ describe('toLogCsv', () => {
 
   test('no rows still yields a usable header-only file', () => {
     assert.equal(toLogCsv([], ['id', 'action']), 'id,action')
+  })
+})
+
+describe('maskLogRowsForExport', () => {
+  const rows = () => [
+    { id: '1', userEmail: 'prakash@novobril.com', ipAddress: '203.0.113.7' },
+    { id: '2', userEmail: null, ipAddress: null },
+  ]
+
+  test('masks userEmail and ipAddress when revealPii is false', () => {
+    // This is the 2026-07-22 fix: the CSV export path previously bypassed
+    // masking entirely regardless of the viewer's Reveal toggle, so a
+    // masked-looking table still produced an unmasked CSV. Live in every
+    // project that had adopted LogViewer before this fix.
+    const [r1] = maskLogRowsForExport(rows(), false)
+    assert.equal(r1.userEmail, 'pr***@novobril.com')
+    assert.equal(r1.ipAddress, '203.0.*.*')
+  })
+
+  test('passes rows through untouched when revealPii is true', () => {
+    const [r1] = maskLogRowsForExport(rows(), true)
+    assert.equal(r1.userEmail, 'prakash@novobril.com')
+    assert.equal(r1.ipAddress, '203.0.113.7')
+  })
+
+  test('a null email or IP stays null, not masked into a garbage string', () => {
+    const [, r2] = maskLogRowsForExport(rows(), false)
+    assert.equal(r2.userEmail, null)
+    assert.equal(r2.ipAddress, null)
+  })
+
+  test('other fields on the row are preserved unchanged', () => {
+    const [r1] = maskLogRowsForExport(rows(), false)
+    assert.equal(r1.id, '1')
   })
 })

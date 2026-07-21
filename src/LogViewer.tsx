@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Shield, FileText, ChevronLeft, ChevronRight, Search, Download, Eye, EyeOff,
 } from 'lucide-react'
-import { maskEmail } from './pii'
+import { maskEmail, maskIp } from './pii'
 import {
-  toLogCsv, AUDIT_CSV_COLUMNS, SECURITY_CSV_COLUMNS, type LogKind, type LogMeta,
+  toLogCsv, maskLogRowsForExport, AUDIT_CSV_COLUMNS, SECURITY_CSV_COLUMNS, type LogKind, type LogMeta,
 } from './log-query'
 
 // Superadmin audit + security log viewer.
@@ -193,9 +193,24 @@ export function LogViewer({
       const params = buildParams(1, exportLimit, applied)
       params.set('export', '1')
       const data = await request(`${endpoint}?${params}`)
-      const all = data.logs ?? []
+      const raw: (AuditLogRow | SecurityLogRow)[] = data.logs ?? []
       const cols = (tab === 'audit' ? AUDIT_CSV_COLUMNS : SECURITY_CSV_COLUMNS) as unknown as string[]
-      const csv = toLogCsv(all, cols)
+      // Export must match what's on screen: masked by default, real values only
+      // once the admin has explicitly hit Reveal. Fixed 2026-07-22 — this
+      // previously serialised the raw API response regardless of `revealPii`,
+      // so a masked-looking table still produced an unmasked CSV on every
+      // export. Found auditing @novobril/core's LogViewer for smartreceipt's
+      // adoption; live in every project that had adopted the viewer before
+      // this fix (screendex, quizzly, bookme) since the bug is in the shared
+      // component, not any one consumer.
+      //
+      // Deliberately NOT reusing `displayEmail`/`displayIp` here — those fall
+      // back to showing userId in place of a missing email for a single
+      // on-screen cell, which is right for the table but wrong for a CSV where
+      // userId and userEmail are separate columns; a null email must stay
+      // empty in its own column, not silently filled with the userId.
+      const all = maskLogRowsForExport(raw, revealPii)
+      const csv = toLogCsv(all as unknown as Record<string, unknown>[], cols)
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -213,6 +228,15 @@ export function LogViewer({
   const displayEmail = (email: string | null, userId: string | null) => {
     if (!email) return userId ?? '—'
     return revealPii ? email : maskEmail(email)
+  }
+
+  // IP is PII per the portfolio's own masking policy ("email, name, phone, DOB,
+  // location, IP") and belongs behind the same reveal toggle as email — it was
+  // shown raw and unconditionally before this fix, which the toggle's own label
+  // ("PII") already implied it should cover.
+  const displayIp = (ip: string | null) => {
+    if (!ip) return '—'
+    return revealPii ? ip : maskIp(ip)
   }
 
   const filterFields = useMemo(
@@ -257,7 +281,7 @@ export function LogViewer({
         </div>
         <button
           onClick={() => setRevealPii((v) => !v)}
-          aria-label={revealPii ? 'Hide email addresses' : 'Reveal email addresses'}
+          aria-label={revealPii ? 'Hide email addresses and IPs' : 'Reveal email addresses and IPs'}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
             revealPii
               ? 'bg-amber-100 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
@@ -378,7 +402,7 @@ export function LogViewer({
                           {(log as SecurityLogRow).severity}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs font-mono">{log.ipAddress ?? '—'}</td>
+                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs font-mono">{displayIp(log.ipAddress)}</td>
                     </>
                   )}
                 </tr>

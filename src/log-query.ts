@@ -7,6 +7,8 @@
 // delegate. A route ends up ~15 lines instead of ~50, and every project gets
 // the same limit clamps and the same CSV hardening.
 
+import { maskEmail, maskIp } from './pii'
+
 export type LogKind = 'audit' | 'security'
 
 export interface LogQuery {
@@ -127,6 +129,28 @@ function csvCell(value: unknown): string {
   let s = value instanceof Date ? value.toISOString() : String(value)
   if (FORMULA_LEAD.test(s)) s = `'${s}`
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+/**
+ * Mask userEmail/ipAddress on a set of rows before they're serialised for
+ * export, unless `revealPii` is true. Fixed 2026-07-22 — the CSV export path
+ * previously bypassed masking entirely regardless of the viewer's "Reveal"
+ * toggle, so a masked-looking table still produced an unmasked CSV on every
+ * export. This is a pure function (not inlined in LogViewer) specifically so
+ * it can be unit-tested without a DOM — this package has no React testing
+ * library by design, and one bad refactor here would silently re-introduce
+ * the leak in every consuming project's export button at once.
+ */
+export function maskLogRowsForExport<T extends { userEmail?: string | null; ipAddress?: string | null }>(
+  rows: T[],
+  revealPii: boolean,
+): T[] {
+  if (revealPii) return rows
+  return rows.map((r) => ({
+    ...r,
+    userEmail: r.userEmail ? maskEmail(r.userEmail) : r.userEmail,
+    ipAddress: r.ipAddress ? maskIp(r.ipAddress) : r.ipAddress,
+  }))
 }
 
 /**
