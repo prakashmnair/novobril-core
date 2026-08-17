@@ -14,8 +14,8 @@ superuser check, ProfileMenu, design tokens).
 |---|---|---|
 | `ThemeToggle` | screendex | Byte-identical across screendex/smartassociation already |
 | `ToastProvider`/`useToast`/`Toaster` | screendex | Canonical API; bookme independently reimplemented a different shape and will need to adapt its call sites when it adopts this |
-| `ConfirmProvider`/`useConfirm`/`ConfirmDialog` | screendex | Same as above |
-| `BackButton` | new | Formalizes the previously-inline `ChevronLeft` className (hand-typed in 28-60+ files per project) |
+| `ConfirmProvider`/`useConfirm`/`ConfirmDialog` | screendex | Same as above. **v0.4.2:** the dialog is now keyboard-operable — Escape closes it, focus moves in on open and returns to the trigger on close, Tab is trapped, and initial focus lands on **Cancel** (a confirm is often destructive, so the safe control is the one a stray Enter hits). Marked up as `role="alertdialog"` + `aria-modal` with labelled title/description. |
+| `BackButton` | new | Formalizes the previously-inline `ChevronLeft` className (hand-typed in 28-60+ files per project). **v0.4.2:** hit area raised from 32×32 to **44×44** (WCAG 2.5.5) — icon size and optical position unchanged. |
 | `getRequestContext`/`getClientIp` | screendex | Includes the S-28 IP-spoofing fix (right-to-left XFF walk) — smartassociation/bookme were both still doing naive leftmost parsing before adopting this |
 | `maskEmail`/`maskName`/`maskPhone`/`maskIp`/`scrubPii` | bookme | Chosen as canonical over screendex/smartassociation's simpler versions because of the entity-based non-PII allowlist — **this is a real behavior change** for any project whose masking output differs today, not a no-op |
 | `isNovobrilSuperuser` | new (extracted from bookme/quizzly's pattern) | Just the hardcoded-email check — deliberately NOT the full request/cookie/DB-coupled superuser guard, which differs too much per project to share yet |

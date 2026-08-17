@@ -3,8 +3,14 @@ import { ChevronLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
+// 44×44 hit area (WCAG 2.1 AA 2.5.5). The icon still renders at 20px — this changes the
+// target size, not the look. `-ml-3` is the centring inset for a 20px icon in a 44px box,
+// so the chevron stays optically flush with the content beneath it.
+//
+// Was `p-1.5 -ml-1.5` (32×32) until v0.4.2 — see MemberBell U-53. Every project that
+// hand-typed the old string inherited an undersized control by following the spec correctly.
 const CLASS_NAME =
-  'p-1.5 -ml-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors'
+  'inline-flex items-center justify-center min-h-11 min-w-11 -ml-3 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors'
 
 export interface BackButtonProps {
   /** Navigate to a specific route instead of browser history — preferred when the target is
