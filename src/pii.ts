@@ -6,7 +6,18 @@ export function maskEmail(email: string): string {
 }
 
 export function maskName(name: string): string {
-  const parts = name.trim().split(' ')
+  const trimmed = name.trim()
+  // A display name is very often the email address verbatim — Google returns the
+  // address as the profile name for plenty of accounts. Without this, such a name
+  // fell straight through: the first whitespace-separated part is returned as-is,
+  // and an address has no spaces, so maskName('someone@example.com') returned
+  // 'someone@example.com' COMPLETELY UNMASKED. Every caller masking a name beside
+  // an email was therefore leaking the address it had just masked one line above
+  // (bookme B-162; quizzly's admin user list had the same shape via maskName).
+  // A masking function must never return an address verbatim, whatever slot it
+  // was handed.
+  if (trimmed.includes('@')) return maskEmail(trimmed)
+  const parts = trimmed.split(' ')
   return parts.map((p, i) => (i === 0 ? p : p[0] + '***')).join(' ')
 }
 
