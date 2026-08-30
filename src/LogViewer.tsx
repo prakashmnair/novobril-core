@@ -31,6 +31,55 @@ export interface AuditLogRow {
   entityId: string | null
   outcome: string
   ipAddress: string | null
+  /**
+   * OPTIONAL on purpose. Every consuming project's audit endpoint returns whatever its Prisma
+   * `findMany` selects; most select everything and so already send this, but a project that
+   * narrows its select simply has no `changes` and the Detail column renders a dash. Marking it
+   * optional keeps this a non-breaking addition — no consumer has to change anything to upgrade.
+   */
+  changes?: unknown
+  metadata?: unknown
+}
+
+/**
+ * A one-line, human summary of an audit row's `changes`/`metadata`.
+ *
+ * WHY THIS EXISTS. The audit table showed `entityType` and a truncated id — "PAGE  cmr93ju2…" —
+ * which says something happened to something and nothing more. The information needed to read the
+ * row was already being sent: bookme's page-view beacon, for instance, stores
+ * `{ page: 'Team', path: '/settings/team' }`, so the table could say "Viewed Team" and instead said
+ * "PAGE". Every project using this viewer had the same blindness.
+ *
+ * DEFENSIVE BY DESIGN. Seven projects share this component and each writes a different `changes`
+ * shape — none of them agreed on a schema, because until now nothing read it. So this makes no
+ * assumption beyond "it might be an object": a missing field, a null, an array, a string, or a
+ * project that does not send `changes` at all all degrade to an empty string and the cell renders a
+ * dash. It must never throw, because a rendering helper that throws takes the whole log viewer down
+ * on the one screen an operator opens when something is already wrong.
+ */
+export function auditDetail(log: AuditLogRow): string {
+  const src = (log.changes ?? log.metadata) as unknown
+  if (!src || typeof src !== 'object' || Array.isArray(src)) return ''
+  const obj = src as Record<string, unknown>
+
+  // PAGE.VIEW is the case that motivated this and the one where the generic summary reads worst
+  // ("page: Team · path: /settings/team"). A recognised page name is rendered as a sentence.
+  if (typeof obj.page === 'string' && obj.page) return `Viewed ${obj.page}`
+
+  const parts: string[] = []
+  for (const [k, v] of Object.entries(obj)) {
+    // Empty strings are skipped alongside null/undefined: a key whose value is '' renders as
+    // "page:  · path: /x", which reads as a broken field rather than an absent one. Found by the
+    // empty-page test, which exists because `page` is special-cased above and '' falls through it.
+    if (v === null || v === undefined || v === '') continue
+    if (parts.length === 3) { parts.push('…'); break }
+    const val =
+      typeof v === 'object' ? '…'
+      : typeof v === 'boolean' ? String(v)
+      : String(v)
+    parts.push(`${k}: ${val.length > 28 ? val.slice(0, 28) + '…' : val}`)
+  }
+  return parts.join(' · ')
 }
 
 export interface SecurityLogRow {
@@ -256,7 +305,7 @@ export function LogViewer({
   )
 
   const headers = tab === 'audit'
-    ? ['Timestamp', 'User', 'Action', 'Entity', 'Outcome']
+    ? ['Timestamp', 'User', 'Action', 'Entity', 'Detail', 'Outcome']
     : ['Timestamp', 'User', 'Event', 'Severity', 'IP']
 
   return (
@@ -382,6 +431,11 @@ export function LogViewer({
                             {(log as AuditLogRow).entityId!.slice(0, 8)}…
                           </span>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300 text-xs max-w-xs">
+                        <span className="block truncate" title={auditDetail(log as AuditLogRow)}>
+                          {auditDetail(log as AuditLogRow) || '—'}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`text-xs font-semibold ${outcomeClass((log as AuditLogRow).outcome)}`}>
