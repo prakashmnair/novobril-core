@@ -39,6 +39,12 @@ export interface AuditLogRow {
    */
   changes?: unknown
   metadata?: unknown
+  /**
+   * A human name for whatever `entityId` points at, resolved by the consuming project's endpoint —
+   * only it knows a Booking id means "Chendamelam performance — 19 Sept". Optional: a project that
+   * resolves nothing still renders the entityType and id exactly as before.
+   */
+  entityLabel?: { label: string; ref?: string } | null
 }
 
 /**
@@ -108,6 +114,11 @@ export interface LogViewerProps {
   exportLimit?: number
   /** Filename stem for exports, e.g. "quizrazor" → `quizrazor-audit-logs-YYYY-MM-DD.csv`. */
   filePrefix?: string
+  /**
+   * Whether PII starts revealed. Defaults to false, preserving the behaviour every consumer had
+   * before v0.4.5 — an existing project upgrades and sees no change.
+   */
+  defaultRevealPii?: boolean
 }
 
 type Filters = Record<string, string>
@@ -152,10 +163,15 @@ export function LogViewer({
   securityEndpoint = '/api/admin/logs/security',
   pageSize = 50,
   exportLimit = 10_000,
-  filePrefix = '',
-}: LogViewerProps) {
+  filePrefix = '', defaultRevealPii = false }: LogViewerProps) {
   const [tab, setTab] = useState<LogKind>('audit')
-  const [revealPii, setRevealPii] = useState(false)
+  // Default is per-project, not global. bookme turns this on because its superadmin is the sole
+  // operator looking at their own platform's logs, and masking made them unreadable without a click
+  // every visit. Another project may have several operators, an outsourced support desk, or a
+  // regulator's expectation that PII is hidden until deliberately revealed — so the SHARED default
+  // stays off and each consumer opts in. Changing the default here would flip the privacy posture
+  // of seven products at once, which is not a decision this component gets to make.
+  const [revealPii, setRevealPii] = useState(defaultRevealPii)
 
   const [rows, setRows] = useState<(AuditLogRow | SecurityLogRow)[]>([])
   const [meta, setMeta] = useState<LogMeta>({ page: 1, limit: pageSize, total: 0, pages: 1 })
@@ -425,11 +441,27 @@ export function LogViewer({
                         <span className="font-mono text-indigo-600 dark:text-indigo-400 text-xs">{(log as AuditLogRow).action}</span>
                       </td>
                       <td className="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">
-                        <span className="text-slate-600 dark:text-slate-300">{(log as AuditLogRow).entityType ?? '—'}</span>
-                        {(log as AuditLogRow).entityId && (
-                          <span className="text-slate-400 dark:text-slate-600 ml-1 font-mono">
-                            {(log as AuditLogRow).entityId!.slice(0, 8)}…
-                          </span>
+                        {/* Prefer the resolved name. `Booking cmr93ju2…` told a reader that
+                            something happened to something; the id is only useful to somebody who
+                            already has a database console open. The short ref stays because it is
+                            what gets quoted in support, and the entityType remains the fallback for
+                            projects that resolve no labels. */}
+                        {(log as AuditLogRow).entityLabel ? (
+                          <>
+                            <span className="text-slate-700 dark:text-slate-200">{(log as AuditLogRow).entityLabel!.label}</span>
+                            {(log as AuditLogRow).entityLabel!.ref && (
+                              <span className="text-slate-400 dark:text-slate-600 ml-1 font-mono">#{(log as AuditLogRow).entityLabel!.ref}</span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-slate-600 dark:text-slate-300">{(log as AuditLogRow).entityType ?? '—'}</span>
+                            {(log as AuditLogRow).entityId && (
+                              <span className="text-slate-400 dark:text-slate-600 ml-1 font-mono">
+                                {(log as AuditLogRow).entityId!.slice(0, 8)}…
+                              </span>
+                            )}
+                          </>
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-600 dark:text-slate-300 text-xs max-w-xs">
