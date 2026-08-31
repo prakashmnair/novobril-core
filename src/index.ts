@@ -39,6 +39,14 @@ export {
   type AuditLogRow,
   type SecurityLogRow,
 } from './LogViewer'
+// v0.4.6: bot-vs-human classification for the audit viewer's Bot/Human badge. Exported so a project
+// can reuse the same verdict server-side (e.g. to exclude crawlers from analytics) without a second,
+// divergent copy of the heuristic.
+export {
+  classifyUserAgent,
+  type ClientVerdict,
+  type UaClassification,
+} from './user-agent'
 // Help Center (v0.4.0). searchHelpArticles was identical in 8 of 10 projects;
 // HelpArticle is generic over each project's own category union, so the package
 // shares the model and the scorer without knowing any project's vocabulary.

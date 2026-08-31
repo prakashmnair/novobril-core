@@ -19,6 +19,7 @@ superuser check, ProfileMenu, design tokens).
 | `getRequestContext`/`getClientIp` | screendex | Includes the S-28 IP-spoofing fix (right-to-left XFF walk) — smartassociation/bookme were both still doing naive leftmost parsing before adopting this |
 | `maskEmail`/`maskName`/`maskPhone`/`maskIp`/`scrubPii` | bookme | Chosen as canonical over screendex/smartassociation's simpler versions because of the entity-based non-PII allowlist — **this is a real behavior change** for any project whose masking output differs today, not a no-op |
 | `isNovobrilSuperuser` | new (extracted from bookme/quizzly's pattern) | Just the hardcoded-email check — deliberately NOT the full request/cookie/DB-coupled superuser guard, which differs too much per project to share yet |
+| `LogViewer`/`parseLogQuery`/`auditDetail`/`classifyUserAgent` | screendex (extracted) | Shared superadmin audit + security log viewer. **v0.4.4:** Detail column summarising `changes` + resolved entity names. **v0.4.5:** email/IP masked behind a reveal toggle (off by default). **v0.4.6:** each audit row expands to show IP, user-agent, request & session id, with a Bot/Human/Unknown badge (`classifyUserAgent`) — it flags self-identifying crawlers and empty UAs, but never upgrades a browser-shaped UA to "bot" (a heuristic must not accuse a real person; the IP is shown for the ambiguous ones). Additive & non-breaking: a consumer that already returns `userAgent` via `...row` gets it for free. |
 
 ## Install
 

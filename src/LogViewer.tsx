@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import {
   Shield, FileText, ChevronLeft, ChevronRight, Search, Download, Eye, EyeOff,
 } from 'lucide-react'
 import { maskEmail, maskIp } from './pii'
+import { classifyUserAgent, type ClientVerdict } from './user-agent'
 import {
   toLogCsv, maskLogRowsForExport, AUDIT_CSV_COLUMNS, SECURITY_CSV_COLUMNS, type LogKind, type LogMeta,
 } from './log-query'
@@ -39,6 +40,15 @@ export interface AuditLogRow {
    */
   changes?: unknown
   metadata?: unknown
+  /**
+   * Client context for the Bot/Human badge and the expandable row detail. Optional and non-breaking,
+   * exactly like `changes`: a project whose audit `findMany` selects these already sends them (most
+   * do, via `...row`), and one that doesn't shows a dash and a null badge. `ipAddress` above is the
+   * real visitor IP wherever the project resolves it (bookme injects it via a Cloudflare header).
+   */
+  userAgent?: string | null
+  sessionId?: string | null
+  requestId?: string | null
   /**
    * A human name for whatever `entityId` points at, resolved by the consuming project's endpoint —
    * only it knows a Booking id means "Chendamelam performance — 19 Sept". Optional: a project that
@@ -129,6 +139,7 @@ const BTN_SECONDARY =
   'flex items-center gap-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-900 dark:text-white rounded-xl font-bold px-5 py-2.5 text-sm transition-colors border border-slate-300 dark:border-slate-700'
 const PAGE_BTN =
   'flex items-center gap-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 text-slate-900 dark:text-white rounded-lg px-3 py-2 text-sm transition-colors'
+const DETAIL_LABEL = 'text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-[10px] pt-0.5'
 
 function fmt(iso: string) {
   const d = new Date(iso)
@@ -179,6 +190,9 @@ export function LogViewer({
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [page, setPage] = useState(1)
+  // Which audit rows have their client-detail drawer open. A Set so several open at once; cleared
+  // whenever the data reloads (below) so an id can't point at a row that has since paged away.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   // Draft = what's in the inputs; applied = what the last search actually used.
   // Keeping them separate is why typing in a filter doesn't refetch on every
@@ -221,6 +235,7 @@ export function LogViewer({
       .then((data) => {
         if (cancelled) return
         setRows(data.logs ?? [])
+        setExpanded(new Set())
         setMeta(data.meta ?? { page: 1, limit: pageSize, total: 0, pages: 1 })
       })
       .catch((err) => {
@@ -302,6 +317,31 @@ export function LogViewer({
   const displayIp = (ip: string | null) => {
     if (!ip) return '—'
     return revealPii ? ip : maskIp(ip)
+  }
+
+  const toggleExpand = (id: string) =>
+    setExpanded((s) => {
+      const next = new Set(s)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  // Bot / Human / Unknown chip. Colour carries the signal: rose = flagged automated, amber = can't
+  // tell, slate = looks like a real browser — deliberately the quiet colour, since most rows are it.
+  const verdictChip = (v: ClientVerdict) => {
+    const cls =
+      v === 'bot'
+        ? 'bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+        : v === 'unknown'
+        ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+    const label = v === 'bot' ? 'Bot' : v === 'unknown' ? 'Unknown' : 'Human'
+    return (
+      <span className={`inline-block px-1.5 py-0.5 rounded border text-[10px] font-semibold leading-none ${cls}`}>
+        {label}
+      </span>
+    )
   }
 
   const filterFields = useMemo(
@@ -429,11 +469,35 @@ export function LogViewer({
               <tr>{headers.map((h) => <th key={h} scope="col" className="px-4 py-3 text-left">{h}</th>)}</tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {rows.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
-                  <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap text-xs">{fmt(log.createdAt)}</td>
+              {rows.map((log) => {
+                const isAudit = tab === 'audit'
+                const a = log as AuditLogRow
+                const ua = isAudit ? (a.userAgent ?? null) : null
+                const cls = ua ? classifyUserAgent(ua) : null
+                const open = expanded.has(log.id)
+                return (
+                <Fragment key={log.id}>
+                <tr
+                  className={`hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors ${isAudit ? 'cursor-pointer' : ''}`}
+                  onClick={isAudit ? () => toggleExpand(log.id) : undefined}
+                  role={isAudit ? 'button' : undefined}
+                  tabIndex={isAudit ? 0 : undefined}
+                  aria-expanded={isAudit ? open : undefined}
+                  onKeyDown={isAudit ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpand(log.id) } } : undefined}
+                >
+                  <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap text-xs">
+                    <span className="inline-flex items-center gap-1.5">
+                      {isAudit && (
+                        <ChevronRight size={12} aria-hidden className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} />
+                      )}
+                      {fmt(log.createdAt)}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-slate-700 dark:text-slate-200 text-xs font-mono">
-                    {displayEmail(log.userEmail, log.userId)}
+                    <span className="inline-flex items-center gap-1.5">
+                      <span>{displayEmail(log.userEmail, log.userId)}</span>
+                      {cls && verdictChip(cls.verdict)}
+                    </span>
                   </td>
                   {tab === 'audit' ? (
                     <>
@@ -492,7 +556,34 @@ export function LogViewer({
                     </>
                   )}
                 </tr>
-              ))}
+                {isAudit && open && (
+                  <tr className="bg-slate-50 dark:bg-slate-900/40">
+                    <td colSpan={headers.length} className="px-4 pb-4 pt-1">
+                      <div className="grid gap-x-6 gap-y-2 sm:grid-cols-[max-content_1fr] max-w-3xl">
+                        <span className={DETAIL_LABEL}>Client</span>
+                        <span className="flex items-center gap-2 flex-wrap text-xs">
+                          {cls ? verdictChip(cls.verdict) : <span className="text-slate-400">—</span>}
+                          <span className="text-slate-600 dark:text-slate-300">{cls?.reason ?? 'No user-agent was recorded for this request.'}</span>
+                        </span>
+
+                        <span className={DETAIL_LABEL}>IP address</span>
+                        <span className="font-mono text-xs text-slate-700 dark:text-slate-200">{displayIp(a.ipAddress)}</span>
+
+                        <span className={DETAIL_LABEL}>User agent</span>
+                        <span className="font-mono text-xs break-all text-slate-700 dark:text-slate-200">{a.userAgent || '—'}</span>
+
+                        <span className={DETAIL_LABEL}>Request ID</span>
+                        <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{a.requestId || '—'}</span>
+
+                        <span className={DETAIL_LABEL}>Session</span>
+                        <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{a.sessionId || '—'}</span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
+                )
+              })}
               {rows.length === 0 && !error && (
                 <tr>
                   <td colSpan={headers.length} className="px-4 py-12 text-center text-slate-500">
