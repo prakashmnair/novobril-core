@@ -557,7 +557,11 @@ export function LogViewer({
                   )}
                 </tr>
                 {isAudit && open && (
-                  <tr className="bg-slate-50 dark:bg-slate-900/40">
+                  // Solid surface, deliberately NOT a /opacity tint: a translucent dark background
+                  // composites over the page backdrop to a washed mid-grey, and light value text on
+                  // it fails contrast in dark mode (the bug this replaced). slate-800 is a hair
+                  // lighter than the rows, so the drawer still reads as an inset panel.
+                  <tr className="bg-slate-100 dark:bg-slate-800">
                     <td colSpan={headers.length} className="px-4 pb-4 pt-1">
                       <div className="grid gap-x-6 gap-y-2 sm:grid-cols-[max-content_1fr] max-w-3xl">
                         <span className={DETAIL_LABEL}>Client</span>
@@ -567,16 +571,16 @@ export function LogViewer({
                         </span>
 
                         <span className={DETAIL_LABEL}>IP address</span>
-                        <span className="font-mono text-xs text-slate-700 dark:text-slate-200">{displayIp(a.ipAddress)}</span>
+                        <span className="font-mono text-xs text-slate-800 dark:text-slate-100">{displayIp(a.ipAddress)}</span>
 
                         <span className={DETAIL_LABEL}>User agent</span>
-                        <span className="font-mono text-xs break-all text-slate-700 dark:text-slate-200">{a.userAgent || '—'}</span>
+                        <span className="font-mono text-xs break-all text-slate-800 dark:text-slate-100">{a.userAgent || '—'}</span>
 
                         <span className={DETAIL_LABEL}>Request ID</span>
-                        <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{a.requestId || '—'}</span>
+                        <span className="font-mono text-xs text-slate-600 dark:text-slate-300">{a.requestId || '—'}</span>
 
                         <span className={DETAIL_LABEL}>Session</span>
-                        <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{a.sessionId || '—'}</span>
+                        <span className="font-mono text-xs text-slate-600 dark:text-slate-300">{a.sessionId || '—'}</span>
                       </div>
                     </td>
                   </tr>
