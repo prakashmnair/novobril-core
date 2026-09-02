@@ -82,8 +82,16 @@ describe('parseLogQuery — filters', () => {
 
   test('scope is merged in — this is how tenant isolation is enforced', () => {
     const { where } = parseLogQuery(sp('userId=u1'), 'audit', { scope: { tenantId: 't1' } })
+    // The user term is now an OR (id or email), so the resulting predicate is
+    // (userId = u1 OR userEmail ~ u1) AND tenantId = t1. Asserting BOTH parts
+    // matters: the OR must not sit outside the tenant condition, or a search
+    // term would return another tenant's rows.
     assert.equal(where.tenantId, 't1')
-    assert.equal(where.userId, 'u1')
+    const or = (where as unknown as { OR: unknown[] }).OR
+    assert.deepEqual(or, [
+      { userId: 'u1' },
+      { userEmail: { contains: 'u1', mode: 'insensitive' } },
+    ])
   })
 
   test('a query param cannot override the server-supplied scope', () => {
@@ -179,5 +187,37 @@ describe('maskLogRowsForExport', () => {
   test('other fields on the row are preserved unchanged', () => {
     const [r1] = maskLogRowsForExport(rows(), false)
     assert.equal(r1.id, '1')
+  })
+})
+
+describe('parseLogQuery — userId matches an email, not just a cuid', () => {
+  // The filter used to be exact-equality on userId alone. In practice the only
+  // identifier a human has on the logs screen is an email address, so searching
+  // "erick" returned "0 entries" — correct, useless, and indistinguishable from
+  // "this user did nothing".
+  test('matches a case-insensitive email substring', () => {
+    const w = parseLogQuery(sp('userId=ERICK'), 'audit').where as { OR: unknown[] }
+    assert.deepEqual(w.OR, [
+      { userId: 'ERICK' },
+      { userEmail: { contains: 'ERICK', mode: 'insensitive' } },
+    ])
+  })
+
+  test('still matches an exact cuid precisely', () => {
+    // Kept as an ALTERNATIVE rather than replaced: an id substring-matching a
+    // different id would be worse than the bug being fixed.
+    const id = 'cmtizpb5j000301s6mvda8nwh'
+    const w = parseLogQuery(sp('userId=' + id), 'audit').where as { OR: unknown[] }
+    assert.deepEqual(w.OR[0], { userId: id })
+  })
+
+  test('adds no OR clause when the field is empty', () => {
+    const w = parseLogQuery(sp(''), 'audit').where as Record<string, unknown>
+    assert.equal('OR' in w, false)
+  })
+
+  test('applies to the security log too', () => {
+    const w = parseLogQuery(sp('userId=nishio'), 'security').where as Record<string, unknown>
+    assert.equal('OR' in w, true)
   })
 })

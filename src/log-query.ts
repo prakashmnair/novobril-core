@@ -57,6 +57,18 @@ function parseDateRange(from: string | null, to: string | null) {
  *
  * `action`/`event` are matched case-insensitively with `contains` (they're the
  * fields people actually grep for); everything else is exact equality.
+ *
+ * `userId` is the exception, and it is deliberate. It used to be exact-equality
+ * on the id column alone, which made the filter unusable in practice: the id is
+ * a cuid, the only identifier a human has to hand is an email address, and the
+ * log screen offers no way to look one up. Searching "erick" returned "0
+ * entries" — correct behaviour, useless outcome, and indistinguishable from
+ * "this user did nothing".
+ *
+ * So the term now matches an exact userId OR a case-insensitive substring of
+ * userEmail. Exact-id is kept as an alternative rather than replaced, because
+ * pasting a known cuid must stay precise — an id substring-matching a different
+ * id would be worse than the original bug.
  */
 export function parseLogQuery(
   searchParams: URLSearchParams,
@@ -75,8 +87,15 @@ export function parseLogQuery(
   const createdAt = parseDateRange(searchParams.get('from'), searchParams.get('to'))
 
   const shared = {
-    ...(userId ? { userId } : {}),
+    ...(userId
+      ? { OR: [{ userId }, { userEmail: { contains: userId, mode: 'insensitive' as const } }] }
+      : {}),
     ...(createdAt ? { createdAt } : {}),
+    // scope LAST so a caller-supplied param can never override it. Note this
+    // also means a scope containing its own `OR` would replace the user-term OR
+    // above — the filter would silently widen to every user in that tenant.
+    // Fail-safe direction (over-broad within the tenant, never across tenants),
+    // but a scope that needs an OR should express it as an AND array instead.
     ...(scope ?? {}),
   }
 
