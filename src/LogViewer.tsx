@@ -134,7 +134,7 @@ export interface LogViewerProps {
 type Filters = Record<string, string>
 
 const INPUT =
-  'bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500'
+  'bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm px-3 py-2 text-slate-900 dark:text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500'
 const BTN_SECONDARY =
   'flex items-center gap-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-900 dark:text-white rounded-xl font-bold px-5 py-2.5 text-sm transition-colors border border-slate-300 dark:border-slate-700'
 const PAGE_BTN =
@@ -375,7 +375,7 @@ export function LogViewer({
               aria-pressed={tab === k}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
                 tab === k
-                  ? 'bg-indigo-600 text-white'
+                  ? 'bg-violet-600 text-white'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -438,7 +438,7 @@ export function LogViewer({
         ))}
         <button
           onClick={search}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold px-5 py-2.5 text-sm transition-colors"
+          className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold px-5 py-2.5 text-sm transition-colors"
         >
           <Search size={14} /> Search
         </button>
@@ -502,7 +502,7 @@ export function LogViewer({
                   {tab === 'audit' ? (
                     <>
                       <td className="px-4 py-3">
-                        <span className="font-mono text-indigo-600 dark:text-indigo-400 text-xs">{(log as AuditLogRow).action}</span>
+                        <span className="font-mono text-violet-600 dark:text-violet-400 text-xs">{(log as AuditLogRow).action}</span>
                       </td>
                       <td className="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">
                         {/* Prefer the resolved name. `Booking cmr93ju2…` told a reader that
