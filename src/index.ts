@@ -35,6 +35,8 @@ export {
   // v0.4.4: exported so a consumer can render the same one-line summary elsewhere (e.g. bookme's
   // provider-facing Activity feed) without reimplementing it and drifting from the viewer.
   auditDetail,
+  formatChanges,
+  CHANGES_MAX_CHARS,
   type LogViewerProps,
   type AuditLogRow,
   type SecurityLogRow,

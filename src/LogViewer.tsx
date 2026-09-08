@@ -73,6 +73,26 @@ export interface AuditLogRow {
  * dash. It must never throw, because a rendering helper that throws takes the whole log viewer down
  * on the one screen an operator opens when something is already wrong.
  */
+/**
+ * The full `changes`/`metadata` payload for the expandable drawer, as readable JSON.
+ *
+ * WHY. Until v0.4.10 the drawer showed client context only (badge, IP, user agent, request id,
+ * session) and never the `changes` column — so a PAGE.VIEW row that stored `path: /movie/after-2019`
+ * gave an operator no way to see the path anywhere in the UI (freemovies, 2026-09-08). Same
+ * defensive stance as `auditDetail`: never throws, degrades to '' when there is nothing to show.
+ * Capped so a large patch body cannot turn the drawer into a wall.
+ */
+export const CHANGES_MAX_CHARS = 4000
+export function formatChanges(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  let text: string
+  if (typeof value === 'string') text = value
+  else {
+    try { text = JSON.stringify(value, null, 2) ?? '' } catch { return '[unserialisable]' }
+  }
+  return text.length > CHANGES_MAX_CHARS ? text.slice(0, CHANGES_MAX_CHARS) + '\n…' : text
+}
+
 export function auditDetail(log: AuditLogRow): string {
   const src = (log.changes ?? log.metadata) as unknown
   if (!src || typeof src !== 'object' || Array.isArray(src)) return ''
@@ -80,7 +100,13 @@ export function auditDetail(log: AuditLogRow): string {
 
   // PAGE.VIEW is the case that motivated this and the one where the generic summary reads worst
   // ("page: Team · path: /settings/team"). A recognised page name is rendered as a sentence.
-  if (typeof obj.page === 'string' && obj.page) return `Viewed ${obj.page}`
+  if (typeof obj.page === 'string' && obj.page) {
+    // `subject` is the specific thing behind a page KIND — the film on a "Film detail" page, the
+    // genre on a "Genre landing" page. Kept as a separate field so `page` stays a bounded set the
+    // audit view can group by; the sentence gets the specific half appended.
+    const subject = typeof obj.subject === 'string' && obj.subject ? ` — ${obj.subject}` : ''
+    return `Viewed ${obj.page}${subject}`
+  }
 
   const parts: string[] = []
   for (const [k, v] of Object.entries(obj)) {
@@ -581,6 +607,15 @@ export function LogViewer({
 
                         <span className={DETAIL_LABEL}>Session</span>
                         <span className="font-mono text-xs text-slate-600 dark:text-slate-300">{a.sessionId || '—'}</span>
+
+                        {formatChanges(a.changes ?? a.metadata) && (
+                          <>
+                            <span className={DETAIL_LABEL}>Changes</span>
+                            <pre className="m-0 font-mono text-xs whitespace-pre-wrap break-all text-slate-800 dark:text-slate-100">
+                              {formatChanges(a.changes ?? a.metadata)}
+                            </pre>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

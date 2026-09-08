@@ -19,7 +19,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { auditDetail, type AuditLogRow } from '../src/LogViewer'
+import { auditDetail, formatChanges, CHANGES_MAX_CHARS, type AuditLogRow } from '../src/LogViewer'
 
 const row = (over: Partial<AuditLogRow>): AuditLogRow => ({
   id: 'a', createdAt: '2026-08-30T00:00:00Z', userId: null, userEmail: null,
@@ -34,6 +34,21 @@ test('renders a page view as a sentence', () => {
     auditDetail(row({ action: 'PAGE.VIEW', changes: { page: 'Team', path: '/settings/team' } })),
     'Viewed Team',
   )
+})
+
+test('appends the subject to a page view when one is stored', () => {
+  // The film behind "Film detail", the genre behind "Genre landing". `page` stays a bounded kind
+  // the audit view can group by; the sentence carries the specific half.
+  assert.equal(
+    auditDetail(row({ action: 'PAGE.VIEW', changes: { page: 'Film detail', path: '/movie/after-2019', subject: 'After (2019)' } })),
+    'Viewed Film detail — After (2019)',
+  )
+})
+
+test('ignores an empty or non-string subject', () => {
+  assert.equal(auditDetail(row({ changes: { page: 'Home', subject: '' } })), 'Viewed Home')
+  assert.equal(auditDetail(row({ changes: { page: 'Home', subject: 42 } })), 'Viewed Home')
+  assert.equal(auditDetail(row({ changes: { page: 'Home', subject: null } })), 'Viewed Home')
 })
 
 test('summarises an ordinary changes object', () => {
@@ -97,4 +112,32 @@ test('a non-string page field is ignored rather than trusted', () => {
 test('an empty-string page falls through to the generic summary', () => {
   const out = auditDetail(row({ changes: { page: '', path: '/x' } }))
   assert.equal(out, 'path: /x')
+})
+
+// ── formatChanges — the drawer's full payload ────────────────────────────────────────────────────
+
+test('formatChanges pretty-prints an object and keeps every key', () => {
+  const out = formatChanges({ page: 'Film detail', path: '/movie/after-2019' })
+  assert.ok(out.includes('"path": "/movie/after-2019"'), out)
+  assert.ok(out.includes('"page": "Film detail"'), out)
+})
+
+test('formatChanges renders nothing for null/undefined so the drawer omits the block', () => {
+  assert.equal(formatChanges(null), '')
+  assert.equal(formatChanges(undefined), '')
+})
+
+test('formatChanges passes a string through and never throws on a circular value', () => {
+  assert.equal(formatChanges('plain'), 'plain')
+  const circular: Record<string, unknown> = {}
+  circular.self = circular
+  let out = 'UNSET'
+  assert.doesNotThrow(() => { out = formatChanges(circular) })
+  assert.equal(out, '[unserialisable]')
+})
+
+test('formatChanges caps a huge payload', () => {
+  const out = formatChanges({ blob: 'x'.repeat(CHANGES_MAX_CHARS * 2) })
+  assert.ok(out.length <= CHANGES_MAX_CHARS + 2, String(out.length))
+  assert.ok(out.endsWith('…'))
 })
