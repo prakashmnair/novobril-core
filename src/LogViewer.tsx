@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import {
   Shield, FileText, ChevronLeft, ChevronRight, Search, Download, Eye, EyeOff,
 } from 'lucide-react'
-import { maskEmail, maskIp } from './pii'
+import { maskEmail, maskIp, maskName } from './pii'
 import { classifyUserAgent, type ClientVerdict } from './user-agent'
 import {
   toLogCsv, maskLogRowsForExport, AUDIT_CSV_COLUMNS, SECURITY_CSV_COLUMNS, type LogKind, type LogMeta,
@@ -27,6 +27,14 @@ export interface AuditLogRow {
   createdAt: string
   userId: string | null
   userEmail: string | null
+  /**
+   * OPTIONAL, non-breaking (like `changes`/`userAgent`): a resolved display name for the actor —
+   * the account's name or phone — shown in the User column when there is no real `userEmail` (an
+   * emailless / phone-only account), so the column reads a name instead of an opaque id. Masked
+   * behind the same reveal toggle as email. A project that doesn't send it keeps the prior
+   * behaviour (fall back to the raw userId). The consuming endpoint resolves it.
+   */
+  userName?: string | null
   action: string
   entityType: string | null
   entityId: string | null
@@ -129,6 +137,8 @@ export interface SecurityLogRow {
   createdAt: string
   userId: string | null
   userEmail: string | null
+  /** OPTIONAL, non-breaking — resolved actor name/phone shown when there's no real email (see AuditLogRow.userName). */
+  userName?: string | null
   event: string
   severity: string
   ipAddress: string | null
@@ -310,8 +320,8 @@ export function LogViewer({
       // this fix (screendex, quizzly, bookme) since the bug is in the shared
       // component, not any one consumer.
       //
-      // Deliberately NOT reusing `displayEmail`/`displayIp` here — those fall
-      // back to showing userId in place of a missing email for a single
+      // Deliberately NOT reusing `displayActor`/`displayIp` here — those fall
+      // back to showing a resolved name (or userId) in place of a missing email for a single
       // on-screen cell, which is right for the table but wrong for a CSV where
       // userId and userEmail are separate columns; a null email must stay
       // empty in its own column, not silently filled with the userId.
@@ -331,9 +341,12 @@ export function LogViewer({
     }
   }
 
-  const displayEmail = (email: string | null, userId: string | null) => {
-    if (!email) return userId ?? '—'
-    return revealPii ? email : maskEmail(email)
+  const displayActor = (email: string | null, userId: string | null, userName?: string | null) => {
+    if (email) return revealPii ? email : maskEmail(email)
+    // No real email (emailless / phone-only account): prefer a resolved name/phone over the
+    // opaque id so the column is readable. Masked behind the same reveal toggle.
+    if (userName) return revealPii ? userName : maskName(userName)
+    return userId ?? '—'
   }
 
   // IP is PII per the portfolio's own masking policy ("email, name, phone, DOB,
@@ -521,7 +534,7 @@ export function LogViewer({
                   </td>
                   <td className="px-4 py-3 text-slate-700 dark:text-slate-200 text-xs font-mono">
                     <span className="inline-flex items-center gap-1.5">
-                      <span>{displayEmail(log.userEmail, log.userId)}</span>
+                      <span>{displayActor(log.userEmail, log.userId, log.userName)}</span>
                       {cls && verdictChip(cls.verdict)}
                     </span>
                   </td>
