@@ -49,6 +49,15 @@ export {
   type ClientVerdict,
   type UaClassification,
 } from './user-agent'
+// Gemini error classification (v0.5.0). A permanent billing failure and a transient
+// rate limit both arrive as RESOURCE_EXHAUSTED; only the message separates them. All
+// six AI routes across quizzly/screendex/bookme said "try again" to both, which is
+// how QuizRazor's AI stayed broken for two weeks without anyone noticing.
+export {
+  classifyAiError,
+  type AiErrorKind,
+  type AiErrorClassification,
+} from './ai-error'
 // Help Center (v0.4.0). searchHelpArticles was identical in 8 of 10 projects;
 // HelpArticle is generic over each project's own category union, so the package
 // shares the model and the scorer without knowing any project's vocabulary.
